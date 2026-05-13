@@ -1,0 +1,117 @@
+CYBER THREAT INTELLIGENCE DASHBOARD REPORT:
+-------------------------------------------
+
+-----------------
+PROJECT OVERVIEW:
+-----------------
+This project is a Cyber Threat Intelligence Dashboard that provides security professionals with a centralized platform to investigate Indicators of Compromise (IOCs) by querying multiple threat intelligence APIs. The system currently integrates with:
+
+-> VirusTotal API: For malware analysis and reputation data
+-> AbuseIPDB API: For IP reputation and abuse scoring
+
+The application features a Flask-based web interface with MongoDB storage for historical IOC lookups, presented in a clean, dark-themed dashboard.
+
+-----------------------
+TECHNICAL ARCHITECTURE:
+-----------------------
+-> Frontend: HTML5 with Bootstrap 5 dark theme
+-> Backend: Python Flask
+-> Database: MongoDB (via Flask-PyMongo)
+-> APIs Integrated: VirusTotal v3, AbuseIPDB v2
+-> Containerization: Docker with docker-compose
+
+-------------
+KEY FEATURES:
+-------------
+1. IOC Lookup System:
+   -> Single search interface for IPs/domains
+   -> Parallel API queries to multiple threat intelligence sources
+   -> Results normalization for consistent display
+
+2. Data Persistence:
+   -> MongoDB storage of all lookups with timestamps
+   -> Historical view of previous investigations
+
+3. Dashboard Interface:
+   -> Responsive table display of IOC results
+   -> Visual representation of threat scores
+   -> Clean, security-focused dark theme
+
+-------------------
+SETUP INSTRUCTIONS:
+-------------------
+PREREQUISITES:
+   -> Docker and docker-compose installed
+   -> API keys for:
+       * VirusTotal (VT_API_KEY)
+       * AbuseIPDB (ABUSEIPDB_API_KEY)
+       
+DEPLOYMENT STEPS: 
+   1. Start the application:
+       # docker-compose up -d
+   2. Access the dashboard at: http://localhost:5000  
+   
+------------
+USAGE GUIDE:
+------------
+1. Basic Operation:
+   -> Enter an IP address or domain in the search field
+   -> Click "Lookup" to query both APIs simultaneously
+   -> View results in the dashboard table
+
+2. Result Interpretation:
+   -> VirusTotal: Shows last analysis statistics
+   -> AbuseIPDB: Displays abuse confidence score (0-100)
+
+3. Historical Data:
+   -> All lookups are stored and displayed in reverse chronological order
+   -> Timestamps help track when each IOC was investigated
+   
+------------------------
+SECURITY CONSIDERATIONS:
+------------------------
+1. Environment Variables:
+   -> All sensitive credentials are loaded from environment variables
+   -> Never hardcoded in the application
+
+2. Database Security:
+   -> MongoDB runs in a separate container
+   -> Network isolation between web and database components
+
+3. API Security:
+   -> All external API calls use HTTPS
+   -> API keys are transmitted in headers
+   
+--------------------
+FUTURE ENHANCEMENTS:
+--------------------
+1. Additional API Integrations:
+   -> AlienVault OTX
+   -> Shodan
+   -> ThreatMiner
+
+2. Enhanced Features:
+   -> IOC type auto-detection (IP, domain, hash)
+   -> Bulk lookup capability
+   -> Scheduled rescans of historical IOCs
+   -> User authentication system
+
+3. Improved UI:
+   -> Visual threat score indicators
+   -> Geolocation mapping
+   -> Exportable reports (PDF/CSV)
+   
+-----------
+CONCLUSION:
+-----------
+This Cyber Threat Intelligence Dashboard provides security teams with a powerful, containerized tool for rapid IOC investigation. The integration with leading threat intelligence APIs combined with historical data storage creates a valuable resource for threat analysts. The modular design allows for easy expansion to include additional data sources and features.
+       
+       
+       
+       
+       
+       
+       
+       
+   
+   
