@@ -6,17 +6,32 @@
 ![Docker](https://img.shields.io/badge/docker-compose-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
-![APIs](https://img.shields.io/badge/APIs-VirusTotal%20%7C%20AbuseIPDB-red)
+![APIs](https://img.shields.io/badge/APIs-VirusTotal%20%7C%20AbuseIPDB-orange)
 
-> A Dockerized Cyber Threat Intelligence platform — lookup IPs and domains against VirusTotal and AbuseIPDB in real time, persist results in MongoDB, and visualize threat data in a Bootstrap dark-theme dashboard.
+> A Dockerized Cyber Threat Intelligence platform — lookup IPs and domains against VirusTotal and AbuseIPDB simultaneously, store results in MongoDB, and visualize threat intelligence in a Bootstrap dark-theme dashboard.
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is intended **ONLY** for:
+
+- Authorized threat intelligence and SOC operations
+- Security research and IOC analysis
+- Cybersecurity education and training
+
+**Always ensure you have authorization before investigating any IP or domain. API usage is subject to VirusTotal and AbuseIPDB terms of service.**
 
 ---
 
 ## Overview
 
-Cyber Threat Intelligence Dashboard is a full-stack threat lookup platform that combines two industry-standard threat intelligence APIs into a single unified interface. Submit any IP address or domain and get instant cross-referenced threat data — VirusTotal engine analysis scores and AbuseIPDB confidence ratings — all persisted to MongoDB for historical tracking.
+Cyber Threat Intelligence Dashboard is a full-stack CTI platform that lets analysts submit Indicators of Compromise (IOCs) — IP addresses or domains — and instantly cross-reference them against two industry-standard threat intelligence feeds:
 
-The entire stack runs in Docker with a single command — Flask app + MongoDB, no manual setup needed.
+- **VirusTotal** — 70+ AV engine scan results, malicious/suspicious/harmless breakdown
+- **AbuseIPDB** — community abuse confidence score, last 90 days of abuse reports
+
+Every lookup is persisted to **MongoDB** with a UTC timestamp, building a searchable historical IOC database. The entire stack runs in **Docker** with a single command.
 
 ---
 
@@ -24,96 +39,81 @@ The entire stack runs in Docker with a single command — Flask app + MongoDB, n
 
 ![CTI Dashboard](CTI.png)
 
-*Live lookup — `45.83.64.1` flagged as malicious: 13 engines on VirusTotal. `8.8.8.8` (Google DNS) showing clean with Abuse Score: 0.*
+*Live lookups — `45.83.64.1` flagged as malicious (13 VT detections), `8.8.8.8` clean (Google DNS). Docker containers visible in terminal.*
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│           CYBER THREAT INTELLIGENCE DASHBOARD                │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │        FLASK APP (app/__init__.py + routes.py)        │  │
-│  │                                                        │  │
-│  │   GET  /        → load IOC history from MongoDB       │  │
-│  │   POST /lookup  → query APIs → store → redirect       │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                            │                                 │
-│            ┌───────────────┴───────────────┐                │
-│            ▼                               ▼                │
-│  ┌──────────────────────┐      ┌──────────────────────────┐ │
-│  │  VIRUSTOTAL API      │      │  ABUSEIPDB API           │ │
-│  │  apis/virustotal.py  │      │  apis/abuseipdb.py       │ │
-│  │                      │      │                          │ │
-│  │  /v3/search?query=   │      │  /v2/check?ip=           │ │
-│  │  x-apikey header     │      │  maxAgeInDays: 90        │ │
-│  │  Returns engine      │      │  Returns abuse           │ │
-│  │  analysis stats      │      │  confidence score        │ │
-│  └──────────────────────┘      └──────────────────────────┘ │
-│                            │                                 │
-│                            ▼                                 │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │              MONGODB (flask-pymongo)                  │  │
-│  │   Database: cti_dashboard                             │  │
-│  │   Collection: iocs                                    │  │
-│  │   Fields: ioc, timestamp, virustotal, abuseipdb       │  │
-│  │   Sorted by timestamp descending                      │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                            │                                 │
-│                            ▼                                 │
-│  ┌────────────────────────────────────────────────────────┐  │
-│  │     BOOTSTRAP DARK DASHBOARD (dashboard.html)         │  │
-│  │   IOC table: IOC | Timestamp | VirusTotal | AbuseIPDB │  │
-│  │   Real-time lookup form                               │  │
-│  └────────────────────────────────────────────────────────┘  │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │              DOCKER COMPOSE                          │    │
-│  │   cti_flask_app  →  port 5000                        │    │
-│  │   cti_mongo      →  port 27017 + persistent volume   │    │
-│  └──────────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│              CYBER THREAT INTELLIGENCE DASHBOARD                 │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │           FLASK WEB APP (app factory pattern)             │  │
+│  │   GET  /        → render dashboard (all IOCs from DB)    │  │
+│  │   POST /lookup  → query APIs → store → redirect          │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                              │                                   │
+│            ┌─────────────────┴──────────────────┐               │
+│            ▼                                    ▼               │
+│  ┌──────────────────────┐         ┌───────────────────────────┐  │
+│  │  VIRUSTOTAL API v3   │         │  ABUSEIPDB API v2         │  │
+│  │  apis/virustotal.py  │         │  apis/abuseipdb.py        │  │
+│  │                      │         │                           │  │
+│  │  /api/v3/search      │         │  /api/v2/check            │  │
+│  │  x-apikey header     │         │  maxAgeInDays: 90         │  │
+│  │  Returns:            │         │  Returns:                 │  │
+│  │  - malicious count   │         │  - abuseConfidenceScore   │  │
+│  │  - suspicious count  │         │  - total reports          │  │
+│  │  - harmless count    │         │  - last reported          │  │
+│  └──────────────────────┘         └───────────────────────────┘  │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │              MONGODB (flask-pymongo)                      │  │
+│  │   Database  : cti_dashboard                               │  │
+│  │   Collection: iocs                                        │  │
+│  │   Fields    : ioc, timestamp, virustotal{}, abuseipdb{}   │  │
+│  │   Sorted    : timestamp DESC                              │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │         BOOTSTRAP 5 DASHBOARD (dashboard.html)            │  │
+│  │   Dark theme, IOC table, VT stats, AbuseIPDB score        │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │              DOCKER COMPOSE                               │  │
+│  │   cti_flask_app  → Flask on :5000                        │  │
+│  │   cti_mongo      → MongoDB 4.4 on :27017                 │  │
+│  │   mongo_data     → persistent named volume               │  │
+│  └────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Features
 
-### 🔍 IOC Lookup
-- Enter any IP address or domain
-- Simultaneously queries VirusTotal and AbuseIPDB
-- Results displayed instantly in the dashboard table
-- Every lookup persisted to MongoDB with UTC timestamp
+- **Dual API enrichment** — every IOC queried against VirusTotal AND AbuseIPDB simultaneously
+- **MongoDB persistence** — full IOC history with UTC timestamps, sorted newest first
+- **Docker Compose** — one command spins up Flask + MongoDB, no manual setup
+- **Environment variable config** — API keys via `.env`, never hardcoded
+- **Bootstrap 5 dark dashboard** — clean analyst-facing table view
+- **App factory pattern** — Flask Blueprint architecture, modular and scalable
+- **Graceful error handling** — missing API key detection, HTTP error responses captured
 
-### 🦠 VirusTotal Integration
-- Uses VirusTotal API v3 `/search` endpoint
-- Returns full `last_analysis_stats`:
-  - `malicious` — engines that flagged as malicious
-  - `suspicious` — engines flagging as suspicious
-  - `undetected` — clean engines
-  - `harmless` — engines confirming clean
-  - `timeout` — engines that timed out
-- API key loaded from environment variable `VT_API_KEY`
+---
 
-### 🚨 AbuseIPDB Integration
-- Uses AbuseIPDB API v2 `/check` endpoint
-- 90-day lookback window
-- Returns `abuseConfidenceScore` (0-100%)
-- API key loaded from environment variable `ABUSEIPDB_API_KEY`
+## Real-World Results
 
-### 🗄️ MongoDB Persistence
-- All lookups stored in `cti_dashboard.iocs` collection
-- Historical IOC table sorted newest-first
-- Persistent Docker volume — data survives container restarts
-
-### 🐳 Docker-First Deployment
-- Single `docker compose up` starts everything
-- Flask app + MongoDB containerized together
-- Environment variables via `.env` file
-- No manual MongoDB installation needed
+| IOC | VT Malicious | VT Suspicious | VT Harmless | Abuse Score | Verdict |
+|-----|-------------|--------------|-------------|-------------|---------|
+| 45.83.64.1 | 13 | 1 | 52 | 0 | ⚠️ Malicious |
+| 8.8.8.8 | 0 | 0 | 61 | 0 | ✅ Clean |
 
 ---
 
@@ -122,21 +122,25 @@ The entire stack runs in Docker with a single command — Flask app + MongoDB, n
 ```
 CyberThreat-Intelligence/
 │
-├── app/
-│   ├── __init__.py           # Flask app factory + MongoDB init
-│   ├── routes.py             # Blueprint routes — index + lookup
-│   ├── apis/
-│   │   ├── virustotal.py     # VirusTotal API v3 integration
-│   │   └── abuseipdb.py      # AbuseIPDB API v2 integration
-│   └── templates/
-│       └── dashboard.html    # Bootstrap 5 dark-theme dashboard
+├── run.py                        # Entry point — listens on 0.0.0.0:5000
+├── Dockerfile                    # Flask app container
+├── docker-compose.yml            # Flask + MongoDB orchestration
+├── requirements.txt              # Python dependencies
+├── .env                          # API keys (not committed to Git)
 │
-├── Dockerfile                # Flask app container
-├── docker-compose.yml        # Flask + MongoDB orchestration
-├── run.py                    # Entry point (host 0.0.0.0 for Docker)
-├── requirements.txt          # Python dependencies
-├── CTI.png                   # Dashboard screenshot
-└── CTI_Report.docx           # Sample CTI report
+├── app/
+│   ├── __init__.py               # App factory, PyMongo init, Blueprint register
+│   ├── routes.py                 # / (dashboard) and /lookup (IOC submission) routes
+│   │
+│   ├── apis/
+│   │   ├── virustotal.py         # VirusTotal v3 API client
+│   │   └── abuseipdb.py          # AbuseIPDB v2 API client
+│   │
+│   └── templates/
+│       └── dashboard.html        # Bootstrap 5 dark theme dashboard
+│
+├── CTI.png                       # Dashboard screenshot
+└── CTI_Report.docx               # Sample CTI analysis report
 ```
 
 ---
@@ -151,20 +155,21 @@ CyberThreat-Intelligence/
 | HTTP Client | requests | 2.31.0 |
 | Config | python-dotenv | 1.0.1 |
 | Frontend | Bootstrap 5 dark theme | 5.3.0 |
-| Containerization | Docker, Docker Compose | 3.8 |
+| Containerization | Docker, Docker Compose | — |
 | Threat Intel | VirusTotal API v3 | — |
 | Threat Intel | AbuseIPDB API v2 | — |
 
 ---
 
-## Installation
+## Prerequisites
 
-### Prerequisites
 - Docker + Docker Compose installed
-- VirusTotal API key ([get free key](https://www.virustotal.com/gui/join-us))
-- AbuseIPDB API key ([get free key](https://www.abuseipdb.com/register))
+- VirusTotal API key (free tier available)
+- AbuseIPDB API key (free tier available)
 
-### Setup
+---
+
+## Installation
 
 **Clone the repository:**
 ```bash
@@ -172,14 +177,14 @@ git clone https://github.com/Ki1shan/CyberThreat-Intelligence.git
 cd CyberThreat-Intelligence
 ```
 
-**Create `.env` file:**
+**Create your `.env` file:**
 ```bash
 VT_API_KEY=your_virustotal_api_key_here
 ABUSEIPDB_API_KEY=your_abuseipdb_api_key_here
-FLASK_SECRET_KEY=your_secret_key_here
+FLASK_SECRET_KEY=your_random_secret_key_here
 ```
 
-**Start the stack:**
+**Start the full stack:**
 ```bash
 docker compose up --build
 ```
@@ -194,62 +199,67 @@ http://127.0.0.1:5000
 ## Usage
 
 1. Open `http://127.0.0.1:5000`
-2. Enter an IP address or domain in the lookup field
+2. Enter an IP address or domain in the **Lookup** field
 3. Click **Lookup**
-4. View results in the IOC table:
-
-| IOC | Timestamp | VirusTotal | AbuseIPDB |
-|-----|-----------|-----------|----------|
-| 45.83.64.1 | 2025-06-23 07:45:02 | malicious: 13, suspicious: 1 | Abuse Score: 0 |
-| 8.8.8.8 | 2025-06-23 07:40:12 | malicious: 0, harmless: 61 | Abuse Score: 0 |
+4. Results appear instantly in the dashboard table:
+   - **IOC** — submitted indicator
+   - **Timestamp** — UTC lookup time
+   - **VirusTotal** — malicious / suspicious / undetected / harmless counts
+   - **AbuseIPDB** — Abuse Confidence Score (0-100)
+5. All lookups persist in MongoDB — full history visible on every page load
 
 ---
 
-## Sample API Responses
+## API Reference
 
-**VirusTotal — malicious IP:**
-```json
-{
-  "last_analysis_stats": {
-    "malicious": 13,
-    "suspicious": 1,
-    "undetected": 28,
-    "harmless": 52,
-    "timeout": 0
-  }
-}
+### VirusTotal (`apis/virustotal.py`)
+```
+GET https://www.virustotal.com/api/v3/search?query={ioc}
+Header: x-apikey: {VT_API_KEY}
+Returns: data[0].attributes.last_analysis_stats
+         → malicious, suspicious, undetected, harmless, timeout counts
 ```
 
-**AbuseIPDB — clean IP:**
-```json
-{
-  "data": {
-    "abuseConfidenceScore": 0,
-    "totalReports": 0,
-    "lastReportedAt": null
-  }
-}
+### AbuseIPDB (`apis/abuseipdb.py`)
+```
+GET https://api.abuseipdb.com/api/v2/check
+Params: ipAddress={ioc}, maxAgeInDays=90
+Header: Key: {ABUSEIPDB_API_KEY}, Accept: application/json
+Returns: data.abuseConfidenceScore (0-100)
 ```
 
 ---
 
-## Environment Variables
+## Docker Services
 
-| Variable | Description |
-|----------|-------------|
-| `VT_API_KEY` | VirusTotal API v3 key |
-| `ABUSEIPDB_API_KEY` | AbuseIPDB API v2 key |
-| `FLASK_SECRET_KEY` | Flask session secret |
-| `MONGO_URI` | MongoDB connection string (default: `mongodb://mongo:27017/cti_dashboard`) |
+| Service | Container | Port | Notes |
+|---------|-----------|------|-------|
+| Flask App | `cti_flask_app` | 5000 | Depends on MongoDB |
+| MongoDB | `cti_mongo` | 27017 | Persistent named volume |
+
+```bash
+docker compose up -d       # Start detached
+docker compose down        # Stop all services
+docker compose logs -f     # Follow live logs
+```
+
+---
+
+## Get Free API Keys
+
+| Service | Free Tier | Link |
+|---------|-----------|------|
+| VirusTotal | ✅ 4 lookups/min | [virustotal.com/gui/join-us](https://www.virustotal.com/gui/join-us) |
+| AbuseIPDB | ✅ 1000 checks/day | [abuseipdb.com/register](https://www.abuseipdb.com/register) |
 
 ---
 
 ## Author
 
 **Kishan N**
-Offensive Security Engineer | Threat Intelligence | Blue Team
+Offensive Security Engineer | Threat Intelligence | SOC Engineering
 
-Built Cyber Threat Intelligence Dashboard to demonstrate real-world CTI workflows — aggregating multi-source threat data into a persistent, queryable platform with a clean analyst-friendly interface.
+Built this CTI platform to demonstrate practical threat intelligence enrichment — combining two industry-standard feeds into a persistent, queryable IOC database with a clean analyst-facing dashboard.
 
 ---
 
@@ -259,4 +269,4 @@ MIT License — see `LICENSE` file for details.
 
 ---
 
-*Know your threats before they know you.*
+*Know your adversary before they know you.*
